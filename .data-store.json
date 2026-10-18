@@ -1,0 +1,138 @@
+{
+  "users": [
+    {
+      "id": "usr_super_admin",
+      "name": "Manish Nagare (Super Admin)",
+      "email": "manishnagare258@gmail.com",
+      "role": "ADMIN",
+      "leetcodeUsername": null,
+      "passwordHash": "$2b$10$QNGfwWkXcx1ySkNpr3hzzudD7ORvuR/MunUH5tBCJ7.4OBFqm3iOK",
+      "createdAt": "2026-10-18T11:34:59.184Z"
+    },
+    {
+      "id": "teacher_turing",
+      "name": "Prof. Alan Turing",
+      "email": "teacher@classroom.edu",
+      "role": "teacher",
+      "leetcodeUsername": null,
+      "passwordHash": "$2b$10$GBO/QpNNHOHY7ywZCh2HduYXa9YIMuoVeIMtEqK4vV/kWufBGhi8G",
+      "createdAt": "2026-10-18T07:57:45.354Z"
+    },
+    {
+      "id": "student_alex",
+      "name": "Alex Rivera",
+      "email": "alex@university.edu",
+      "role": "student",
+      "leetcodeUsername": "neal_wu",
+      "passwordHash": "$2b$10$GBO/QpNNHOHY7ywZCh2HduYXa9YIMuoVeIMtEqK4vV/kWufBGhi8G",
+      "createdAt": "2026-10-18T07:57:45.355Z"
+    },
+    {
+      "id": "student_sarah",
+      "name": "Sarah Chen",
+      "email": "sarah@university.edu",
+      "role": "student",
+      "leetcodeUsername": "lee215",
+      "passwordHash": "$2b$10$GBO/QpNNHOHY7ywZCh2HduYXa9YIMuoVeIMtEqK4vV/kWufBGhi8G",
+      "createdAt": "2026-10-18T07:57:45.355Z"
+    },
+    {
+      "id": "student_david",
+      "name": "David Kim",
+      "email": "david@university.edu",
+      "role": "student",
+      "leetcodeUsername": "tourist",
+      "passwordHash": "$2b$10$GBO/QpNNHOHY7ywZCh2HduYXa9YIMuoVeIMtEqK4vV/kWufBGhi8G",
+      "createdAt": "2026-10-18T07:57:45.355Z"
+    },
+    {
+      "id": "student_maya",
+      "name": "Maya Patel",
+      "email": "maya@university.edu",
+      "role": "student",
+      "leetcodeUsername": "awice",
+      "passwordHash": "$2b$10$GBO/QpNNHOHY7ywZCh2HduYXa9YIMuoVeIMtEqK4vV/kWufBGhi8G",
+      "createdAt": "2026-10-18T07:57:45.355Z"
+    },
+    {
+      "id": "usr_1792311404035_osnef",
+      "email": "madarauchihaaa22002@gmail.com",
+      "name": "Manish Nagare",
+      "role": "student",
+      "leetcodeUsername": "Manii1212",
+      "passwordHash": "$2b$10$dDblE3B6ZlvaJfXeadVWQueIeRBdoB5kdGUARXcVtYMsnGADsqVmu",
+      "createdAt": "2026-10-18T08:16:44.035Z"
+    },
+    {
+      "id": "usr_1792337700537_iv3nc",
+      "email": "ashishtakankar@gmail.com",
+      "name": "Ashish Takankar",
+      "role": "student",
+      "leetcodeUsername": "Ashish_Takankar_07",
+      "passwordHash": "$2b$10$Xsmn20FSKFhBkrzOO5CV7e4/EKcFwTYjQxml7dxI.5iOtqEt/DtRK",
+      "createdAt": "2026-10-18T15:35:00.537Z"
+    }
+  ],
+  "classes": [
+    {
+      "id": "class_algo_201",
+      "name": "CS 201: Data Structures & Algorithms",
+      "code": "ALGO24",
+      "description": "Foundations of data structures, graph traversals, and dynamic programming.",
+      "teacherId": "teacher_turing",
+      "createdAt": "2026-10-18T07:57:45.355Z"
+    },
+    {
+      "id": "class_comp_350",
+      "name": "CS 350: Competitive Programming Seminar",
+      "code": "COMP35",
+      "description": "Weekly LeetCode contests, mock interviews, and advanced algorithmic thinking.",
+      "teacherId": "teacher_turing",
+      "createdAt": "2026-10-18T07:57:45.355Z"
+    }
+  ],
+  "enrollments": [
+    {
+      "id": "enr_1",
+      "studentId": "student_alex",
+      "classId": "class_algo_201",
+      "joinedAt": "2026-10-13T07:57:45.355Z"
+    },
+    {
+      "id": "enr_2",
+      "studentId": "student_sarah",
+      "classId": "class_algo_201",
+      "joinedAt": "2026-10-14T07:57:45.355Z"
+    },
+    {
+      "id": "enr_3",
+      "studentId": "student_david",
+      "classId": "class_algo_201",
+      "joinedAt": "2026-10-15T07:57:45.355Z"
+    },
+    {
+      "id": "enr_4",
+      "studentId": "student_maya",
+      "classId": "class_algo_201",
+      "joinedAt": "2026-10-16T07:57:45.355Z"
+    },
+    {
+      "id": "enr_5",
+      "studentId": "student_alex",
+      "classId": "class_comp_350",
+      "joinedAt": "2026-10-16T07:57:45.355Z"
+    },
+    {
+      "id": "enr_6",
+      "studentId": "student_sarah",
+      "classId": "class_comp_350",
+      "joinedAt": "2026-10-17T07:57:45.355Z"
+    },
+    {
+      "id": "enr_1792311425966_ofrsm",
+      "studentId": "usr_1792311404035_osnef",
+      "classId": "class_algo_201",
+      "joinedAt": "2026-10-18T08:17:05.966Z"
+    }
+  ]
+}

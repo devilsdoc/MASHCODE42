@@ -54,10 +54,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
     setIsLoading(true);
     try {
       const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
+      const normalizedEmail = email.trim().toLowerCase();
       const body =
         mode === 'login'
-          ? { email, password }
-          : { name, email, password, role, leetcodeUsername: role === 'student' ? leetcodeUsername : null };
+          ? { email: normalizedEmail, password }
+          : { name: name.trim(), email: normalizedEmail, password, role, leetcodeUsername: role === 'student' ? leetcodeUsername.trim() : null };
 
       const res = await fetch(endpoint, {
         method: 'POST',

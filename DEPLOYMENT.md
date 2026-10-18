@@ -88,3 +88,31 @@ After deployment finishes:
 - [ ] Test Student flow: Create a student account, link a LeetCode username (e.g. `neal_wu` or `tourist`), join classroom with code.
 - [ ] Test LeetCode synchronization: Verify problems solved counts (Easy/Medium/Hard), contest ratings, recent submissions, and 16-week activity heatmap.
 - [ ] Test Caching: Verify that repeated page reloads use the 10-minute cache and response times remain under 50ms.
+
+---
+
+## 🛠️ Step 5: Serverless Troubleshooting (Fixing "Invalid email or password")
+
+If login fails after deploying to the live URL:
+
+### 1. Prisma Client in Serverless (`src/lib/prisma.ts`)
+In serverless environments (Vercel, AWS Lambda), multiple functions can spawn simultaneously. Instantiating `new PrismaClient()` on each request rapidly exhausts database connections.
+Use the global singleton pattern implemented in `src/lib/prisma.ts` / `prisma.ts`:
+```typescript
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
+export const prisma = globalForPrisma.prisma ?? new PrismaClient();
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+```
+
+### 2. NextAuth Configuration (`src/lib/auth.ts`)
+- **NEXTAUTH_URL**: Do not hardcode `http://localhost:3000`. Use dynamic resolution or set `NEXTAUTH_URL=https://your-domain.vercel.app` in your hosting dashboard.
+- **useSecureCookies**: Set to `true` in production to ensure cookies pass securely over HTTPS.
+- **Secret**: Ensure `secret: process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET`.
+
+### 3. Reading Live Logs
+Both `/api/auth/login` and NextAuth authorize callbacks include rich log statements:
+- The email address received
+- Whether that user exists in the database
+- Exact bcrypt password hash verification status
+Check your Vercel / Cloud Run runtime logs for `[API /api/auth/login]` or `[NextAuth Login]` to identify if the issue is a missing user, unseeded database, or casing mismatch.
+

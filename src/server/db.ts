@@ -26,6 +26,7 @@ interface DatabaseSchema {
 }
 
 const DB_FILE = path.resolve(process.cwd(), '.data-store.json');
+const TMP_DB_FILE = path.resolve('/tmp', '.data-store.json');
 
 class DatabaseStore {
   private data: DatabaseSchema = {
@@ -39,6 +40,8 @@ class DatabaseStore {
     if (this.data.users.length === 0) {
       this.seed();
     }
+    // Ensure Super Admin user is always present and properly configured
+    this.seedAdminUser();
   }
 
   private load() {
@@ -46,7 +49,14 @@ class DatabaseStore {
       if (fs.existsSync(DB_FILE)) {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         this.data = JSON.parse(raw);
-        console.log(`[DB] Loaded data: ${this.data.users.length} users, ${this.data.classes.length} classes, ${this.data.enrollments.length} enrollments`);
+        console.log(`[DB] Loaded data from local store: ${this.data.users.length} users, ${this.data.classes.length} classes, ${this.data.enrollments.length} enrollments`);
+        return;
+      }
+      if (fs.existsSync(TMP_DB_FILE)) {
+        const raw = fs.readFileSync(TMP_DB_FILE, 'utf-8');
+        this.data = JSON.parse(raw);
+        console.log(`[DB] Loaded data from /tmp store: ${this.data.users.length} users, ${this.data.classes.length} classes, ${this.data.enrollments.length} enrollments`);
+        return;
       }
     } catch (e) {
       console.error('[DB] Failed to load data file, initializing fresh:', e);
@@ -57,7 +67,12 @@ class DatabaseStore {
     try {
       fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
     } catch (e) {
-      console.error('[DB] Failed to save data store:', e);
+      try {
+        fs.writeFileSync(TMP_DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
+      } catch (tmpErr) {
+        // In purely stateless memory environments, state remains in this.data
+        console.warn('[DB] Persistent file write unavailable in serverless environment, keeping in memory.');
+      }
     }
   }
 
@@ -162,7 +177,7 @@ class DatabaseStore {
     email: string;
     name: string;
     password: string;
-    role: 'teacher' | 'student';
+    role: 'teacher' | 'student' | 'admin' | 'ADMIN';
     leetcodeUsername?: string | null;
   }): DbUser {
     const salt = bcrypt.genSaltSync(10);
@@ -304,6 +319,182 @@ class DatabaseStore {
       })
       .filter((s): s is NonNullable<typeof s> => s !== null);
   }
+
+  // Super Admin Methods
+  seedAdminUser(): DbUser {
+    const ADMIN_EMAIL = 'manishnagare258@gmail.com';
+    const ADMIN_PASSWORD = 'M@nii1212';
+    const salt = bcrypt.genSaltSync(10);
+    const passwordHash = bcrypt.hashSync(ADMIN_PASSWORD, salt);
+
+    // Enforce invariant: ONLY ONE admin user with exact email can ever hold admin role
+    for (const u of this.data.users) {
+      if (u.email.toLowerCase() !== ADMIN_EMAIL && (u.role === 'admin' || (u.role as string) === 'ADMIN')) {
+        u.role = 'teacher';
+      }
+    }
+
+    let adminUser = this.data.users.find(
+      (u) => u.email.toLowerCase() === ADMIN_EMAIL
+    );
+
+    if (adminUser) {
+      adminUser.role = 'ADMIN';
+      adminUser.passwordHash = passwordHash;
+      if (!adminUser.name || adminUser.name === 'Admin' || adminUser.name === 'Super Admin') {
+        adminUser.name = 'Manish Nagare (Super Admin)';
+      }
+    } else {
+      adminUser = {
+        id: 'usr_super_admin',
+        name: 'Manish Nagare (Super Admin)',
+        email: ADMIN_EMAIL,
+        role: 'ADMIN',
+        leetcodeUsername: null,
+        passwordHash,
+        createdAt: new Date().toISOString(),
+      };
+      this.data.users.unshift(adminUser);
+    }
+
+    this.save();
+    console.log(`[DB] Super Admin user ensured: ${ADMIN_EMAIL} (role: ADMIN)`);
+    return adminUser;
+  }
+
+  getAllTeachers(): Array<Omit<DbUser, 'passwordHash'> & { createdClassesCount: number; totalStudentsCount: number }> {
+    return this.data.users
+      .filter((u) => u.role === 'teacher')
+      .map((t) => {
+        const classes = this.data.classes.filter((c) => c.teacherId === t.id);
+        const classIds = new Set(classes.map((c) => c.id));
+        const totalStudents = this.data.enrollments.filter((e) => classIds.has(e.classId)).length;
+        const { passwordHash, ...safe } = t;
+        return {
+          ...safe,
+          createdClassesCount: classes.length,
+          totalStudentsCount: totalStudents,
+        };
+      });
+  }
+
+  getAllStudents(): Array<Omit<DbUser, 'passwordHash'> & { enrolledClassesCount: number; enrolledClasses: string[] }> {
+    return this.data.users
+      .filter((u) => u.role === 'student')
+      .map((s) => {
+        const enrollments = this.data.enrollments.filter((e) => e.studentId === s.id);
+        const classNames = enrollments.map((e) => {
+          const cls = this.findClassById(e.classId);
+          return cls ? cls.name : e.classId;
+        });
+        const { passwordHash, ...safe } = s;
+        return {
+          ...safe,
+          enrolledClassesCount: enrollments.length,
+          enrolledClasses: classNames,
+        };
+      });
+  }
+
+  getAllClassesAdmin(): Array<
+    DbClass & {
+      teacherName: string;
+      teacherEmail: string;
+      studentCount: number;
+      students: Array<{ id: string; name: string; email: string; leetcodeUsername?: string | null }>;
+    }
+  > {
+    return this.data.classes.map((cls) => {
+      const teacher = this.findUserById(cls.teacherId);
+      const enrollments = this.data.enrollments.filter((e) => e.classId === cls.id);
+      const students = enrollments.map((enr) => {
+        const stu = this.findUserById(enr.studentId);
+        return {
+          id: enr.studentId,
+          name: stu ? stu.name : 'Unknown',
+          email: stu ? stu.email : '',
+          leetcodeUsername: stu ? stu.leetcodeUsername : null,
+        };
+      });
+
+      return {
+        ...cls,
+        teacherName: teacher ? teacher.name : 'Unknown Instructor',
+        teacherEmail: teacher ? teacher.email : 'Unknown Email',
+        studentCount: enrollments.length,
+        students,
+      };
+    });
+  }
+
+  deleteUser(userId: string): { success: boolean; error?: string } {
+    const user = this.findUserById(userId);
+    if (!user) {
+      return { success: false, error: 'User not found' };
+    }
+    if (user.email.toLowerCase() === 'manishnagare258@gmail.com' || user.role === 'admin' || (user.role as string) === 'ADMIN') {
+      return { success: false, error: 'Cannot delete the Super Admin account' };
+    }
+
+    // Delete related classes if teacher
+    if (user.role === 'teacher') {
+      const teacherClassIds = this.data.classes.filter((c) => c.teacherId === userId).map((c) => c.id);
+      this.data.classes = this.data.classes.filter((c) => c.teacherId !== userId);
+      this.data.enrollments = this.data.enrollments.filter((e) => !teacherClassIds.includes(e.classId));
+    }
+
+    // Delete enrollments if student
+    if (user.role === 'student') {
+      this.data.enrollments = this.data.enrollments.filter((e) => e.studentId !== userId);
+    }
+
+    this.data.users = this.data.users.filter((u) => u.id !== userId);
+    this.save();
+    return { success: true };
+  }
+
+  deleteClass(classId: string): { success: boolean; error?: string } {
+    const cls = this.findClassById(classId);
+    if (!cls) {
+      return { success: false, error: 'Class not found' };
+    }
+    this.data.classes = this.data.classes.filter((c) => c.id !== classId);
+    this.data.enrollments = this.data.enrollments.filter((e) => e.classId !== classId);
+    this.save();
+    return { success: true };
+  }
+
+  getAdminOverview() {
+    const teachers = this.getAllTeachers();
+    const students = this.getAllStudents();
+    const classes = this.getAllClassesAdmin();
+
+    return {
+      stats: {
+        totalUsers: this.data.users.length,
+        totalTeachers: teachers.length,
+        totalStudents: students.length,
+        totalClasses: classes.length,
+        totalEnrollments: this.data.enrollments.length,
+      },
+      teachers,
+      students,
+      classes,
+    };
+  }
 }
 
-export const db = new DatabaseStore();
+// Ensure global singleton instantiation in serverless environments to prevent connection/instance leaks
+const globalForDb = globalThis as unknown as {
+  dbInstance: DatabaseStore | undefined;
+};
+
+export const db = globalForDb.dbInstance ?? new DatabaseStore();
+
+// Cache on globalThis for both development and production serverless execution
+// to ensure warm serverless containers reuse existing in-memory store & connection pools:
+globalForDb.dbInstance = db;
+
+// Re-export prisma singleton for serverless PostgreSQL access
+export { prisma } from '../lib/prisma.ts';
+

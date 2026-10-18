@@ -213,20 +213,19 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, token 
   const handleRefreshStudentStats = async (username: string) => {
     setIsRefreshingStats(true);
     try {
-      const res = await fetch(`/api/leetcode/${username}/refresh`, {
-        method: 'POST',
-      });
+      const res = await fetch(`/api/leetcode-stats?username=${encodeURIComponent(username)}&refresh=true`);
       const data = await res.json();
-      if (res.ok && data.stats) {
+      if (res.ok && (data.stats || data.solvedProblem !== undefined)) {
+        const studentStats = data.stats || data;
         setStudents((prev) =>
           prev.map((s) =>
             s.leetcodeUsername.toLowerCase() === username.toLowerCase()
-              ? { ...s, stats: data.stats }
+              ? { ...s, stats: studentStats }
               : s
           )
         );
         if (inspectStudent && inspectStudent.leetcodeUsername.toLowerCase() === username.toLowerCase()) {
-          setInspectStudent((prev) => (prev ? { ...prev, stats: data.stats } : null));
+          setInspectStudent((prev) => (prev ? { ...prev, stats: studentStats } : null));
         }
       }
     } catch {

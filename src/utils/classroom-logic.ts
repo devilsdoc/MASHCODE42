@@ -120,6 +120,7 @@ export function filterAndSortStudents(
  * Verify role permissions
  */
 export function canManageClass(userRole: string, teacherId: string, currentUserId: string): boolean {
+  if (userRole.toLowerCase() === 'admin') return true;
   if (userRole !== 'teacher') return false;
   return teacherId === currentUserId;
 }

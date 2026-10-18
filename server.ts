@@ -11,7 +11,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+// Runtime Environment requires the dev server to run strictly on port 3000
+const PORT = 3000;
 const SECRET_KEY = process.env.JWT_SECRET || 'leetcode-classroom-dashboard-secret-key-42';
 
 app.use(express.json());
@@ -70,14 +71,35 @@ function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunctio
   next();
 }
 
-function requireRole(role: 'teacher' | 'student') {
+function requireRole(role: 'teacher' | 'student' | 'admin' | 'ADMIN') {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
-    if (!req.user || req.user.role !== role) {
+    if (!req.user || req.user.role.toLowerCase() !== role.toLowerCase()) {
       res.status(403).json({ error: `Access forbidden: ${role} role required` });
       return;
     }
     next();
   };
+}
+
+const SUPER_ADMIN_EMAIL = 'manishnagare258@gmail.com';
+
+function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
+  if (!req.user) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+
+  const role = (req.user.role || '').toLowerCase();
+  const email = (req.user.email || '').toLowerCase().trim();
+
+  if (role !== 'admin' || email !== SUPER_ADMIN_EMAIL) {
+    res.status(403).json({
+      error: 'Access forbidden: Only the designated Super Admin (manishnagare258@gmail.com) can access this resource.',
+    });
+    return;
+  }
+
+  next();
 }
 
 // -----------------------------------------------------------------------------
@@ -130,17 +152,44 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
 app.post('/api/auth/login', (req: Request, res: Response) => {
   const { email, password } = req.body;
 
+  console.log(`[API /api/auth/login] Attempt received for email: "${email}"`);
+
   if (!email || !password) {
+    console.log('[API /api/auth/login] Error: Missing email or password in request body.');
     res.status(400).json({ error: 'Email and password are required' });
     return;
   }
 
-  const user = db.findUserByEmail(email);
-  if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  const user = db.findUserByEmail(normalizedEmail);
+
+  console.log(
+    `[API /api/auth/login] User found in database: ${Boolean(user)}`,
+    user
+      ? `(ID: ${user.id}, Role: ${user.role}, Stored Email: "${user.email}")`
+      : `(No user found with email "${normalizedEmail}")`
+  );
+
+  if (!user) {
+    console.log(`[API /api/auth/login] Authentication failed: User "${normalizedEmail}" does not exist in the database.`);
     res.status(401).json({ error: 'Invalid email or password' });
     return;
   }
 
+  try {
+    const isPasswordValid = bcrypt.compareSync(password, user.passwordHash);
+    if (!isPasswordValid) {
+      console.log(`[API /api/auth/login] Authentication failed: Password hash mismatch for user "${user.email}".`);
+      res.status(401).json({ error: 'Invalid email or password' });
+      return;
+    }
+  } catch (bcryptErr) {
+    console.error(`[API /api/auth/login] Authentication failed: Exception in bcrypt comparison for user "${user.email}":`, bcryptErr);
+    res.status(401).json({ error: 'Invalid email or password' });
+    return;
+  }
+
+  console.log(`[API /api/auth/login] Authentication successful for user "${user.email}" (${user.role}).`);
   const token = createToken(user.id);
   const { passwordHash, ...safeUser } = user;
   res.json({ user: safeUser, token });
@@ -370,10 +419,43 @@ app.delete('/api/classes/:id/students/:studentId', requireAuth, requireRole('tea
 });
 
 // -----------------------------------------------------------------------------
-// LeetCode Direct API Proxy Endpoints
+// LeetCode Direct Official GraphQL API Proxy Endpoints
 // -----------------------------------------------------------------------------
 
-// Fetch user stats with 10-minute cache
+// Direct GraphQL stats endpoint supporting /api/leetcode-stats?username=...
+app.get('/api/leetcode-stats', async (req: Request, res: Response) => {
+  const username = (req.query.username as string | undefined)?.trim();
+  const forceRefresh = req.query.refresh === 'true';
+
+  if (!username) {
+    res.status(400).json({ error: 'Username query parameter is required (e.g. /api/leetcode-stats?username=example)' });
+    return;
+  }
+
+  if (!validateLeetcodeUsername(username)) {
+    res.status(400).json({ error: 'Invalid LeetCode username format' });
+    return;
+  }
+
+  try {
+    const stats = await getLeetCodeUserStats(username, { forceRefresh });
+    res.json({
+      success: true,
+      username: stats.username,
+      totalSolved: stats.solvedProblem,
+      solvedProblem: stats.solvedProblem,
+      easySolved: stats.easySolved,
+      mediumSolved: stats.mediumSolved,
+      hardSolved: stats.hardSolved,
+      stats,
+    });
+  } catch (err: any) {
+    console.error(`[LeetCode GraphQL Error] Could not retrieve data for username "${username}":`, err?.message || err);
+    res.status(500).json({ error: 'Unable to fetch LeetCode data right now' });
+  }
+});
+
+// Backward-compatible path: Fetch user stats with cache
 app.get('/api/leetcode/:username', async (req: Request, res: Response) => {
   const { username } = req.params;
   if (!validateLeetcodeUsername(username)) {
@@ -383,9 +465,19 @@ app.get('/api/leetcode/:username', async (req: Request, res: Response) => {
 
   try {
     const stats = await getLeetCodeUserStats(username);
-    res.json({ stats });
+    res.json({
+      success: true,
+      username: stats.username,
+      totalSolved: stats.solvedProblem,
+      solvedProblem: stats.solvedProblem,
+      easySolved: stats.easySolved,
+      mediumSolved: stats.mediumSolved,
+      hardSolved: stats.hardSolved,
+      stats,
+    });
   } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to fetch LeetCode data' });
+    console.error(`[LeetCode GraphQL Error] Could not retrieve data for username "${username}":`, err?.message || err);
+    res.status(500).json({ error: 'Unable to fetch LeetCode data right now' });
   }
 });
 
@@ -400,10 +492,132 @@ app.post('/api/leetcode/:username/refresh', async (req: Request, res: Response) 
   invalidateLeetCodeCache(username);
   try {
     const stats = await getLeetCodeUserStats(username, { forceRefresh: true });
-    res.json({ stats, refreshed: true });
+    res.json({
+      success: true,
+      refreshed: true,
+      username: stats.username,
+      totalSolved: stats.solvedProblem,
+      solvedProblem: stats.solvedProblem,
+      easySolved: stats.easySolved,
+      mediumSolved: stats.mediumSolved,
+      hardSolved: stats.hardSolved,
+      stats,
+    });
   } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to refresh LeetCode data' });
+    console.error(`[LeetCode GraphQL Error] Could not refresh data for username "${username}":`, err?.message || err);
+    res.status(500).json({ error: 'Unable to fetch LeetCode data right now' });
   }
+});
+
+// -----------------------------------------------------------------------------
+// Super Admin Protected Endpoints (Strictly for manishnagare258@gmail.com)
+// -----------------------------------------------------------------------------
+
+// Seed / Verify the single Super Admin account
+app.post('/api/admin/seed', (req: Request, res: Response) => {
+  const { email, password } = req.body || {};
+  // If credentials passed, enforce that they match the designated Super Admin
+  if (email && email.trim().toLowerCase() !== SUPER_ADMIN_EMAIL) {
+    res.status(403).json({ error: `Only ${SUPER_ADMIN_EMAIL} can be provisioned as Super Admin.` });
+    return;
+  }
+  if (password && password !== 'M@nii1212') {
+    res.status(400).json({ error: 'Password does not match designated Super Admin specification.' });
+    return;
+  }
+
+  const adminUser = db.seedAdminUser();
+  const { passwordHash, ...safeAdmin } = adminUser;
+  res.json({
+    success: true,
+    message: 'Super Admin user successfully seeded and verified.',
+    admin: safeAdmin,
+  });
+});
+
+// Verify Super Admin access status
+app.get('/api/admin/check-access', requireAuth, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+  res.json({
+    allowed: true,
+    user: {
+      id: req.user!.id,
+      email: req.user!.email,
+      role: req.user!.role,
+    },
+  });
+});
+
+// Admin System Overview (Teachers, Students, Classes, Stats)
+app.get('/api/admin/overview', requireAuth, requireAdmin, (_req: AuthenticatedRequest, res: Response) => {
+  const overview = db.getAdminOverview();
+  res.json(overview);
+});
+
+// List all teachers
+app.get('/api/admin/teachers', requireAuth, requireAdmin, (_req: AuthenticatedRequest, res: Response) => {
+  res.json({ teachers: db.getAllTeachers() });
+});
+
+// List all students
+app.get('/api/admin/students', requireAuth, requireAdmin, (_req: AuthenticatedRequest, res: Response) => {
+  res.json({ students: db.getAllStudents() });
+});
+
+// Master God Mode view: All students with live/cached LeetCode statistics
+app.get('/api/admin/students-with-stats', requireAuth, requireAdmin, async (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const students = db.getAllStudents();
+    const studentsWithStats = await Promise.all(
+      students.map(async (student) => {
+        if (!student.leetcodeUsername) {
+          return {
+            ...student,
+            stats: null,
+          };
+        }
+        try {
+          const stats = await getLeetCodeUserStats(student.leetcodeUsername);
+          return {
+            ...student,
+            stats,
+          };
+        } catch {
+          return {
+            ...student,
+            stats: null,
+          };
+        }
+      })
+    );
+    res.json({ students: studentsWithStats });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to fetch student statistics' });
+  }
+});
+
+// List all classes
+app.get('/api/admin/classes', requireAuth, requireAdmin, (_req: AuthenticatedRequest, res: Response) => {
+  res.json({ classes: db.getAllClassesAdmin() });
+});
+
+// Delete user (prevents deleting the Super Admin)
+app.delete('/api/admin/users/:id', requireAuth, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+  const result = db.deleteUser(req.params.id);
+  if (!result.success) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.json({ success: true, message: 'User deleted successfully' });
+});
+
+// Delete class
+app.delete('/api/admin/classes/:id', requireAuth, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+  const result = db.deleteClass(req.params.id);
+  if (!result.success) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.json({ success: true, message: 'Class deleted successfully' });
 });
 
 // -----------------------------------------------------------------------------

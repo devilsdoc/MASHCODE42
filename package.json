@@ -9,10 +9,13 @@
     "start": "tsx server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
+    "seed:admin": "tsx scripts/seed-admin.ts",
+    "test": "node --import tsx --test src/utils/classroom-logic.test.ts src/utils/csv-export.test.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
+    "@prisma/client": "^7.10.1",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",
     "bcryptjs": "^3.0.3",
@@ -33,6 +36,7 @@
     "@types/react-dom": "^19.3.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
+    "prisma": "^8.0.0-rc.23",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^7.0.2"

@@ -75,12 +75,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, token,
     setIsLoadingStats(true);
     setError(null);
     try {
-      const res = await fetch(`/api/leetcode/${username}`);
+      const res = await fetch(`/api/leetcode-stats?username=${encodeURIComponent(username)}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to fetch LeetCode statistics');
-      setStats(data.stats);
+      if (!res.ok) throw new Error(data.error || 'Unable to fetch LeetCode data right now');
+      setStats(data.stats || data);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Unable to fetch LeetCode data right now');
     } finally {
       setIsLoadingStats(false);
     }
@@ -173,12 +173,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ user, token,
   const handleRefreshStats = async (username: string) => {
     setIsRefreshingStats(true);
     try {
-      const res = await fetch(`/api/leetcode/${username}/refresh`, {
-        method: 'POST',
-      });
+      const res = await fetch(`/api/leetcode-stats?username=${encodeURIComponent(username)}&refresh=true`);
       const data = await res.json();
-      if (res.ok && data.stats) {
-        setStats(data.stats);
+      if (res.ok && (data.stats || data.solvedProblem !== undefined)) {
+        setStats(data.stats || data);
       }
     } catch {
       // Handled quietly
