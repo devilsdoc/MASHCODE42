@@ -1,0 +1,6 @@
+{
+  "name": "LeetCode Classroom Dashboard",
+  "description": "Real-time classroom dashboard for teachers and students to monitor LeetCode problem solving, contest rankings, submission heatmaps, and progress.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

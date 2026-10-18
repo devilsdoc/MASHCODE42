@@ -1,0 +1,74 @@
+// Prisma Schema for LeetCode Classroom Dashboard
+// Database: PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  teacher
+  student
+}
+
+model User {
+  id               String       @id @default(cuid())
+  email            String       @unique
+  passwordHash     String
+  name             String
+  role             Role         @default(student)
+  leetcodeUsername String?      // Required for students wishing to join classes
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  // Relations
+  createdClasses   Class[]      @relation("TeacherClasses")
+  enrollments      Enrollment[]
+
+  @@index([email])
+  @@index([leetcodeUsername])
+}
+
+model Class {
+  id          String       @id @default(cuid())
+  name        String
+  code        String       @unique // 6-character unique class code (e.g., ALGO24)
+  description String?
+  teacherId   String
+  teacher     User         @relation("TeacherClasses", fields: [teacherId], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  enrollments Enrollment[]
+
+  @@index([teacherId])
+  @@index([code])
+}
+
+model Enrollment {
+  id        String   @id @default(cuid())
+  studentId String
+  student   User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime @default(now())
+
+  @@unique([studentId, classId])
+  @@index([classId])
+  @@index([studentId])
+}
+
+// Optional model for caching LeetCode stats in the database
+model LeetCodeCache {
+  username  String   @id
+  data      Json
+  updatedAt DateTime @updatedAt
+  cachedAt  DateTime @default(now())
+
+  @@index([username])
+}
