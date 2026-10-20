@@ -23,7 +23,9 @@ import {
   Download,
   FileSpreadsheet,
   BarChart2,
+  Trophy,
 } from 'lucide-react';
+import { ClassroomLeaderboard } from './ClassroomLeaderboard.tsx';
 import {
   BarChart,
   Bar,
@@ -47,8 +49,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, token 
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Active view tab: 'roster' | 'analytics' | 'classes'
-  const [activeTab, setActiveTab] = useState<'roster' | 'analytics' | 'classes'>('roster');
+  // Active view tab: 'roster' | 'analytics' | 'classes' | 'leaderboard'
+  const [activeTab, setActiveTab] = useState<'roster' | 'analytics' | 'classes' | 'leaderboard'>('roster');
 
   // Search & Filter state
   const [search, setSearch] = useState('');
@@ -346,6 +348,18 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, token 
         >
           <Users className="w-3.5 h-3.5 text-orange-400" />
           <span>Student Roster & Stats</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('leaderboard')}
+          className={`px-3.5 py-2 rounded-xl transition-all flex items-center gap-2 ${
+            activeTab === 'leaderboard'
+              ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+              : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          <Trophy className="w-3.5 h-3.5 text-amber-400" />
+          <span>Leaderboard</span>
         </button>
         <button
           type="button"
@@ -788,6 +802,26 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, token 
                 </div>
               )}
             </div>
+          )}
+
+          {/* Classroom Leaderboard Tab */}
+          {activeTab === 'leaderboard' && selectedClass && (
+            <ClassroomLeaderboard
+              classId={selectedClass.id}
+              className={selectedClass.name}
+              classCode={selectedClass.code}
+              token={token}
+              onInspectStudent={(student) => {
+                setInspectStudent({
+                  id: student.id,
+                  name: student.name,
+                  email: student.email,
+                  leetcodeUsername: student.leetcodeUsername,
+                  joinedAt: '',
+                  stats: student.stats,
+                });
+              }}
+            />
           )}
 
           {/* Class Analytics Tab */}

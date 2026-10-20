@@ -62,3 +62,50 @@ export interface EnrolledStudent {
   isLoadingStats?: boolean;
   statsError?: string | null;
 }
+
+export interface LeaderboardStudent {
+  id: string;
+  name: string;
+  email: string;
+  leetcodeUsername: string;
+  joinedAt: string;
+  rankBySolved: number;
+  rankByRating: number;
+  solvedProblem: number;
+  easySolved: number;
+  mediumSolved: number;
+  hardSolved: number;
+  contestRating?: number;
+  contestRanking?: number;
+  contestGlobalRanking?: number;
+  contestTopPercentage?: number;
+  globalRanking: number;
+  acceptanceRate?: number;
+  stats?: LeetCodeStats | null;
+  statsError?: string | null;
+}
+
+export interface LeaderboardSummary {
+  totalStudents: number;
+  studentsWithStats: number;
+  topSolved?: {
+    name: string;
+    username: string;
+    solved: number;
+  } | null;
+  topRating?: {
+    name: string;
+    username: string;
+    rating: number;
+  } | null;
+  averageSolved: number;
+  averageRating: number;
+}
+
+export interface LeaderboardResponse {
+  classId: string;
+  className: string;
+  classCode: string;
+  summary: LeaderboardSummary;
+  leaderboard: LeaderboardStudent[];
+}

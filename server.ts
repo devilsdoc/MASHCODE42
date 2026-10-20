@@ -73,11 +73,16 @@ function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunctio
 
 function requireRole(role: 'teacher' | 'student' | 'admin' | 'ADMIN') {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
-    if (!req.user || req.user.role.toLowerCase() !== role.toLowerCase()) {
-      res.status(403).json({ error: `Access forbidden: ${role} role required` });
+    if (!req.user) {
+      res.status(401).json({ error: 'Authentication required' });
       return;
     }
-    next();
+    const userRole = (req.user.role || '').toLowerCase();
+    if (userRole === role.toLowerCase() || userRole === 'admin') {
+      next();
+      return;
+    }
+    res.status(403).json({ error: `Access forbidden: ${role} role required` });
   };
 }
 
@@ -198,7 +203,12 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
 // Fast Demo Login for instant review
 app.post('/api/auth/demo-login', (req: Request, res: Response) => {
   const { role } = req.body;
-  const email = role === 'teacher' ? 'teacher@classroom.edu' : 'alex@university.edu';
+  const email =
+    role === 'admin'
+      ? 'manishnagare258@gmail.com'
+      : role === 'teacher'
+      ? 'teacher@classroom.edu'
+      : 'alex@university.edu';
   const user = db.findUserByEmail(email);
 
   if (!user) {
@@ -242,7 +252,10 @@ app.post('/api/auth/update-leetcode', requireAuth, (req: AuthenticatedRequest, r
 // List classes for the logged in user
 app.get('/api/classes', requireAuth, (req: AuthenticatedRequest, res: Response) => {
   const user = req.user!;
-  if (user.role === 'teacher') {
+  if ((user.role || '').toUpperCase() === 'ADMIN') {
+    const classes = db.getAllClassesAdmin();
+    res.json({ classes });
+  } else if (user.role === 'teacher') {
     const classes = db.getTeacherClasses(user.id);
     res.json({ classes });
   } else {
@@ -392,6 +405,150 @@ app.get('/api/classes/:id/students', requireAuth, requireRole('teacher'), async 
   );
 
   res.json({ students: studentsWithStats });
+});
+
+// Classroom Leaderboard endpoint (ranked by problems solved and contest ratings)
+app.get('/api/classes/:id/leaderboard', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const classId = req.params.id;
+  const targetClass = db.findClassById(classId);
+
+  if (!targetClass) {
+    res.status(404).json({ error: 'Class not found' });
+    return;
+  }
+
+  if (!canManageClass(req.user!.role, targetClass.teacherId, req.user!.id)) {
+    res.status(403).json({ error: 'You can only view the leaderboard for classes you own' });
+    return;
+  }
+
+  const rawStudents = db.getClassStudents(classId);
+
+  // Fetch stats for all enrolled students
+  const studentsWithStats = await Promise.all(
+    rawStudents.map(async (student) => {
+      if (!student.leetcodeUsername) {
+        return {
+          ...student,
+          stats: null,
+          statsError: 'No LeetCode username linked',
+        };
+      }
+
+      try {
+        const stats = await getLeetCodeUserStats(student.leetcodeUsername);
+        return {
+          ...student,
+          stats,
+          statsError: null,
+        };
+      } catch (err: any) {
+        return {
+          ...student,
+          stats: null,
+          statsError: err.message || 'Failed to fetch LeetCode stats',
+        };
+      }
+    })
+  );
+
+  // Build sorted ranks for problems solved (descending)
+  const sortedBySolved = [...studentsWithStats].sort((a, b) => {
+    const aSolved = a.stats?.solvedProblem ?? -1;
+    const bSolved = b.stats?.solvedProblem ?? -1;
+    return bSolved - aSolved;
+  });
+
+  const solvedRankMap = new Map<string, number>();
+  sortedBySolved.forEach((s, idx) => {
+    solvedRankMap.set(s.id, idx + 1);
+  });
+
+  // Build sorted ranks for contest rating (descending)
+  const sortedByRating = [...studentsWithStats].sort((a, b) => {
+    const aRating = a.stats?.contestRating ?? -1;
+    const bRating = b.stats?.contestRating ?? -1;
+    return bRating - aRating;
+  });
+
+  const ratingRankMap = new Map<string, number>();
+  sortedByRating.forEach((s, idx) => {
+    ratingRankMap.set(s.id, idx + 1);
+  });
+
+  // Build combined leaderboard items
+  const leaderboard = studentsWithStats.map((s) => ({
+    id: s.id,
+    name: s.name,
+    email: s.email,
+    leetcodeUsername: s.leetcodeUsername,
+    joinedAt: s.joinedAt,
+    rankBySolved: solvedRankMap.get(s.id) || 0,
+    rankByRating: ratingRankMap.get(s.id) || 0,
+    solvedProblem: s.stats?.solvedProblem ?? 0,
+    easySolved: s.stats?.easySolved ?? 0,
+    mediumSolved: s.stats?.mediumSolved ?? 0,
+    hardSolved: s.stats?.hardSolved ?? 0,
+    contestRating: s.stats?.contestRating,
+    contestRanking: s.stats?.contestRanking,
+    contestGlobalRanking: s.stats?.contestGlobalRanking,
+    contestTopPercentage: s.stats?.contestTopPercentage,
+    globalRanking: s.stats?.ranking ?? 0,
+    acceptanceRate: s.stats?.acceptanceRate,
+    stats: s.stats,
+    statsError: s.statsError,
+  }));
+
+  // Calculate summary metrics
+  let totalSolved = 0;
+  let totalRating = 0;
+  let studentsWithStatsCount = 0;
+  let studentsWithRatingCount = 0;
+  let topSolvedStudent: { name: string; username: string; solved: number } | null = null;
+  let topRatedStudent: { name: string; username: string; rating: number } | null = null;
+
+  leaderboard.forEach((item) => {
+    if (item.stats) {
+      studentsWithStatsCount++;
+      totalSolved += item.solvedProblem;
+      if (!topSolvedStudent || item.solvedProblem > topSolvedStudent.solved) {
+        topSolvedStudent = {
+          name: item.name,
+          username: item.leetcodeUsername,
+          solved: item.solvedProblem,
+        };
+      }
+
+      if (item.contestRating) {
+        studentsWithRatingCount++;
+        totalRating += item.contestRating;
+        if (!topRatedStudent || item.contestRating > topRatedStudent.rating) {
+          topRatedStudent = {
+            name: item.name,
+            username: item.leetcodeUsername,
+            rating: item.contestRating,
+          };
+        }
+      }
+    }
+  });
+
+  const summary = {
+    totalStudents: rawStudents.length,
+    studentsWithStats: studentsWithStatsCount,
+    topSolved: topSolvedStudent,
+    topRating: topRatedStudent,
+    averageSolved: studentsWithStatsCount > 0 ? Math.round(totalSolved / studentsWithStatsCount) : 0,
+    averageRating: studentsWithRatingCount > 0 ? Math.round(totalRating / studentsWithRatingCount) : 0,
+  };
+
+  res.json({
+    classId: targetClass.id,
+    className: targetClass.name,
+    classCode: targetClass.code,
+    summary,
+    leaderboard,
+  });
 });
 
 // Remove student from class (Teacher only)

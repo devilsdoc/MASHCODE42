@@ -79,6 +79,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
     }
   };
 
+  const handleDemoLogin = async (demoRole: 'teacher' | 'student' | 'admin') => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/auth/demo-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: demoRole }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Demo login failed');
+      onSuccess(data.user, data.token);
+    } catch (err: any) {
+      setError(err.message || 'Demo login failed');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-[80vh] flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-zinc-900/90 backdrop-blur-2xl border border-zinc-800 rounded-3xl p-8 shadow-2xl space-y-6">
@@ -253,6 +272,56 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onSuccess }) => {
             <span>{isLoading ? 'Processing...' : mode === 'login' ? 'Sign In to Mashcode' : 'Create Mashcode Account'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
+
+          {/* Quick 1-Click Instant Test Accounts */}
+          {mode === 'login' && (
+            <div className="pt-4 border-t border-zinc-800/80 space-y-2.5">
+              <div className="flex items-center justify-between text-[11px] text-zinc-500 font-mono">
+                <span>INSTANT DEMO ACCESS</span>
+                <span>1-CLICK SIGN IN</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => handleDemoLogin('teacher')}
+                  className="px-2.5 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-left transition-all group"
+                >
+                  <div className="text-[11px] font-bold text-white group-hover:text-blue-400 flex items-center gap-1">
+                    <GraduationCap className="w-3 h-3 text-blue-400" />
+                    <span>Teacher</span>
+                  </div>
+                  <div className="text-[10px] text-zinc-500 font-mono truncate">Prof. Turing</div>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => handleDemoLogin('student')}
+                  className="px-2.5 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-left transition-all group"
+                >
+                  <div className="text-[11px] font-bold text-white group-hover:text-emerald-400 flex items-center gap-1">
+                    <UserCheck className="w-3 h-3 text-emerald-400" />
+                    <span>Student</span>
+                  </div>
+                  <div className="text-[10px] text-zinc-500 font-mono truncate">Alex Rivera</div>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => handleDemoLogin('admin')}
+                  className="px-2.5 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-left transition-all group"
+                >
+                  <div className="text-[11px] font-bold text-white group-hover:text-amber-400 flex items-center gap-1">
+                    <Terminal className="w-3 h-3 text-amber-400" />
+                    <span>Admin</span>
+                  </div>
+                  <div className="text-[10px] text-zinc-500 font-mono truncate">Super Admin</div>
+                </button>
+              </div>
+            </div>
+          )}
         </form>
       </div>
     </div>
